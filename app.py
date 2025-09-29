@@ -105,7 +105,7 @@ def create_pdf(order_details):
 # ============ APP ============
 init_db()
 
-st.title("☕ Cafe Management System (MySQL)")
+st.title("☕ Cafe Management System ")
 
 # Categorized menu (feel free to edit)
 MENU = {
