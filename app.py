@@ -124,6 +124,7 @@ def create_pdf(order_details):
 init_db()
 
 st.title("☕ Cafe Management System ")
+st.write("this app has a custom background")
 
 # Categorized menu (feel free to edit)
 MENU = {
