@@ -53,10 +53,10 @@ def insert_order(order):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO orders
-        (customer_name, table_no, date_time, items_json, discount, total, payment)
-        VALUES (%s, %s, %s, CAST(%s AS JSON), %s, %s, %s)
+        (order_id,customer_name, table_no, date_time, items_json, discount, total, payment)
+        VALUES (%s, %s, %s, %s ,CAST(%s AS JSON), %s, %s, %s)
     """, (
-        
+        order["order_id"],
         order["customer_name"],
         order["table"],
         order["date_time"],
