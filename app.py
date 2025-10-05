@@ -1,4 +1,22 @@
 import streamlit as st
+import requests
+import pandas as pd
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-image: url("https://images.unsplash.com/photo-1506619216599-9d16d0903dfd?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NDR8fGNhZmV8ZW58MHx8MHx8fDA%3D");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
 import datetime, json
 from io import BytesIO
 
@@ -53,10 +71,10 @@ def insert_order(order):
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO orders
-        (customer_name, table_no, date_time, items_json, discount, total, payment)
-        VALUES (%s, %s, %s, CAST(%s AS JSON), %s, %s, %s)
+        (order_id,customer_name, table_no, date_time, items_json, discount, total, payment)
+        VALUES (%s, %s, %s ,%s ,CAST(%s AS JSON), %s, %s, %s)
     """, (
-        
+        order["order_id"],
         order["customer_name"],
         order["table"],
         order["date_time"],
@@ -105,18 +123,19 @@ def create_pdf(order_details):
 # ============ APP ============
 init_db()
 
-st.title("☕ Cafe Management System (MySQL)")
+st.title("☕ Cafe Management System ")
 
 # Categorized menu (feel free to edit)
 MENU = {
-    "Drinks": {"Coffee": 3.00, "Tea": 2.50},
-    "Snacks": {"Sandwich": 5.00, "Cake": 4.00}
+    "Drinks": {"Coffee": 3.00,"Tea": 2.50},
+    "Snacks": {"Sandwich": 5.00,"Cake": 4.00},
+    "meals":{"burger":8.00,"fries":3.50}
 }
 
 # Inputs
 colA, colB = st.columns(2)
 with colA:
-    customer_name = st.text_input("Customer_name Name", placeholder="e.g., Alex")
+    customer_name = st.text_input("Customer_Name", placeholder="e.g., sadia")
 with colB:
     table_no = st.number_input("Table No.", min_value=1, step=1, value=1)
 
