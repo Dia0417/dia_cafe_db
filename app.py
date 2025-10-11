@@ -1,6 +1,4 @@
 import streamlit as st
-import requests
-import pandas as pd
 st.markdown(
     """
     <style>
@@ -28,70 +26,58 @@ try:
 except Exception:
     PDF_OK = False
 
-# ============ MYSQL SETUP ============
-import mysql.connector
-from mysql.connector import Error
-
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",          # <-- apna user
-    "password": "Kashaf@1122",  # <-- apna password
-    "database": "cafe_db",
-}
-
+# ============ sqlite SETUP ============
+import sqlite3
+DB_PATH = "cafe.db"
 def get_conn():
-    return mysql.connector.connect(**DB_CONFIG)
+    return sqlite3.connect(DB_PATH)
 
 def init_db():
-    try:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute("""
-            CREATE TABLE IF NOT EXISTS orders (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                order_id VARCHAR(32) NOT NULL,
-                customer VARCHAR(100) NOT NULL,
-                table_no INT NOT NULL,
-                date_time DATETIME NOT NULL,
-                items_json JSON NOT NULL,
-                discount INT NOT NULL,
-                total DECIMAL(10,2) NOT NULL,
-                payment VARCHAR(20) NOT NULL
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id TEXT NOT NULL,
+            customer TEXT NOT NULL,
+            table_no INTEGER NOT NULL,
+            date_time TEXT NOT NULL,
+            items_json TEXT NOT NULL,
+            discount INTEGER NOT NULL,
+            total REAL NOT NULL,
+            payment TEXT NOT NULL
             )
         """)
         conn.commit()
-    finally:
-        try:
-            cur.close(); conn.close()
-        except:
-            pass
+        conn.close()
 
 def insert_order(order):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO orders
-        (order_id,customer_name, table_no, date_time, items_json, discount, total, payment)
-        VALUES (%s, %s, %s ,%s ,CAST(%s AS JSON), %s, %s, %s)
+        (order_id, customer, table_no, date_time, items_json, discount, total, payment)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         order["order_id"],
-        order["customer_name"],
-        order["table"],
+        order["customer"],
+        order["table_no"],
         order["date_time"],
-        json.dumps(order["items"]),     # store items as JSON
+        order["items_json"],     # store items as JSON
         order["discount"],
-        float(order["total"]),
+        order["total"],
         order["payment"],
     ))
     conn.commit()
-    cur.close(); conn.close()
+    conn.close()
 
 def fetch_orders(limit=100):
     conn = get_conn()
-    cur = conn.cursor(dictionary=True)
-    cur.execute("SELECT * FROM orders ORDER BY order_id DESC LIMIT %s", (limit,))
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM orders ORDER BY id DESC LIMIT ?", (limit,))
     rows = cur.fetchall()
-    cur.close(); conn.close()
+    conn.close()
     return rows
 
 # ============ PDF HELPER ============
@@ -102,8 +88,8 @@ def create_pdf(order_details):
 
     c.drawString(200, 750, "Cafe Management System - Bill")
     c.drawString(50, 720, f"Order ID: {order_details['order_id']}")
-    c.drawString(50, 700, f"Customer_name: {order_details['customer_name']}")
-    c.drawString(50, 680, f"Table No: {order_details['table']}")
+    c.drawString(50, 700, f"Customer: {order_details['customer']}")
+    c.drawString(50, 680, f"Table No: {order_details['table_no']}")
     c.drawString(50, 660, f"Date: {order_details['date_time'].strftime('%Y-%m-%d %H:%M:%S')}")
 
     y = 630
@@ -125,6 +111,7 @@ init_db()
 
 st.title("☕ Cafe Management System ")
 st.write("this app has a custom background")
+
 
 # Categorized menu (feel free to edit)
 MENU = {
@@ -157,17 +144,17 @@ final_total = round(order_total - (order_total * discount / 100), 2)
 payment_method = st.radio("Payment Method", ["Cash", "Card", "Online"], horizontal=True)
 
 # Generate & Save
-if st.button("Generate Bill & Save to MySQL"):
+if st.button("Generate Bill & Save to sqlite"):
     if not ordered_items:
         st.warning("Please select at least one item.")
     else:
         order_id = f"ORD-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
         order_obj = {
             "order_id": order_id,
-            "customer_name": customer_name if customer_name.strip() else "Guest",
-            "table": int(table_no),
-            "date_time": datetime.datetime.now(),
-            "items": ordered_items,
+            "customer": customer_name.strip() if customer_name.strip() else "Guest",
+            "table_no": int(table_no),
+            "date_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "items_json": json.dumps(ordered_items),
             "discount": int(discount),
             "total": final_total,
             "payment": payment_method
@@ -175,28 +162,32 @@ if st.button("Generate Bill & Save to MySQL"):
 
         try:
             insert_order(order_obj)
-            st.success(f"Saved to MySQL ✓  Order ID: {order_id}")
+            st.success(f"Saved to sqlite ✓  Order ID: {order_id}")
             st.subheader("🧾 Bill Summary")
             st.write(f"*Order:* {order_id}")
-            st.write(f"*Customer_name:* {order_obj['customer_name']}  |  *Table:* {order_obj['table']}")
-            st.write(f"*Date:* {order_obj['date_time'].strftime('%Y-%m-%d %H:%M:%S')}")
+            st.write(f"*Customer:* {order_obj['customer']}  |  *Table:* {order_obj['table_no']}")
+            st.write(f"*Date:* {order_obj['date_time']}")
             st.write("---")
             for it in ordered_items:
                 st.write(f"{it['qty']} × {it['name']} = ${it['cost']:.2f}")
             st.write("---")
             st.write(f"Discount: {discount}%")
-            st.success(f"Total: *${final_total:.2f}*  |  Payment: *{payment_method}*")
+            st.success(f"Total:${final_total:.2f}|  Payment: *{payment_method}*")
 
             if PDF_OK:
-                pdf_buf = create_pdf(order_obj)
+                pdf_order = order_obj.copy()
+                pdf_order["items"] = ordered_items
+                pdf_order["date_time"] = datetime.datetime.strptime(order_obj["date_time"], '%Y-%m-%d %H:%M:%S')
+                pdf_buf = create_pdf(pdf_order)
                 st.download_button("⬇ Download PDF Bill", data=pdf_buf,
                                    file_name=f"{order_id}.pdf", mime="application/pdf")
             else:
                 st.info("PDF module not found. Install reportlab to enable PDF download.")
 
-        except Error as e:
-            st.error(f"MySQL error: {e}")
+        except sqlite3.Error as e:
+            st.error(f"sqlite error: {e}")
 
+# History from DB
 # History from DB
 st.subheader("📜 Order History (latest 100)")
 try:
@@ -204,13 +195,16 @@ try:
     if rows:
         for r in rows:
             # items count shown brief
-            items = json.loads(r["items_json"])
-            qty_sum = sum(i["qty"] for i in items)
-            st.write(
-                f"{r['order_id']}** | {r['customer_name']} | Table {r['table_no']} | "
-                f"{qty_sum} items | ${float(r['total']):.2f} | {r['date_time']}"
-            )
+            try:
+                items = json.loads(r["items_json"])
+                qty_sum = sum(i["qty"] for i in items)
+                st.write(
+                    f"{r['order_id']} | {r['customer']} | Table {r['table_no']} | "
+                    f"{qty_sum} items | ${float(r['total']):.2f} | {r['date_time']}"
+                )
+            except Exception as e:
+                st.write(f"Error loading items for order {r['order_id']}: {e}")
     else:
         st.info("No orders yet.")
-except Error as e:
-    st.error(f"MySQL error while fetching history: {e}")
+except sqlite3.Error as e:
+    st.error(f"sqlite3 error: {e}")
